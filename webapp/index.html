@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Тетрис</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="score-panel">
+            <span>Счёт: <span id="score">0</span></span>
+        </div>
+        <canvas id="game-canvas"></canvas>
+        <div id="game-over-overlay" class="hidden">
+            <div id="game-over-box">
+                <h2>Game Over</h2>
+                <p>Счёт: <span id="final-score">0</span></p>
+                <button id="restart-btn">Играть снова</button>
+            </div>
+        </div>
+        <div id="controls">
+            <button class="control-btn" id="btn-left">&#9664;</button>
+            <button class="control-btn" id="btn-down">&#9660;</button>
+            <button class="control-btn" id="btn-rotate">&#8635;</button>
+            <button class="control-btn" id="btn-right">&#9654;</button>
+        </div>
+    </div>
+    <script src="tetris.js"></script>
+</body>
+</html>
