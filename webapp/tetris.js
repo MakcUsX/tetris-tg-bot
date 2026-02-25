@@ -89,7 +89,16 @@
         ],
     ];
 
-    let board, score, currentPiece, gameOver, dropInterval, animationId;
+    let board, score, currentPiece, gameOver, animationId;
+    let lastTime = 0;
+    let dropAccumulator = 0;
+    const DROP_INTERVAL = 600;
+
+    // Line clear animation state
+    let flashingRows = [];
+    let flashTimer = 0;
+    const FLASH_DURATION = 400;
+    const FLASH_BLINKS = 4;
 
     function createBoard() {
         const b = [];
@@ -142,32 +151,51 @@
                 board[y][x] = currentPiece.type + 1;
             }
         }
-        clearLines();
-        currentPiece = randomPiece();
-        if (collides(currentPiece, 0, 0)) {
-            showGameOver();
+
+        const fullRows = [];
+        for (let r = 0; r < ROWS; r++) {
+            if (board[r].every((cell) => cell !== 0)) {
+                fullRows.push(r);
+            }
+        }
+
+        if (fullRows.length > 0) {
+            flashingRows = fullRows;
+            flashTimer = 0;
+            currentPiece = null;
+        } else {
+            spawnNext();
         }
     }
 
-    function clearLines() {
-        let linesCleared = 0;
-        for (let r = ROWS - 1; r >= 0; r--) {
-            if (board[r].every((cell) => cell !== 0)) {
-                board.splice(r, 1);
-                board.unshift(new Array(COLS).fill(0));
-                linesCleared++;
-                r++;
-            }
+    function removeFullRows() {
+        let linesCleared = flashingRows.length;
+        const rowsToRemove = [...flashingRows].sort((a, b) => b - a);
+        for (const r of rowsToRemove) {
+            board.splice(r, 1);
+            board.unshift(new Array(COLS).fill(0));
         }
         if (linesCleared > 0) {
             const points = [0, 100, 300, 500, 800];
             score += points[linesCleared] || linesCleared * 200;
             scoreEl.textContent = score;
         }
+        flashingRows = [];
+    }
+
+    function spawnNext() {
+        currentPiece = randomPiece();
+        if (collides(currentPiece, 0, 0)) {
+            showGameOver();
+        }
+    }
+
+    function isLocked() {
+        return gameOver || flashingRows.length > 0 || !currentPiece;
     }
 
     function moveDown() {
-        if (gameOver) return;
+        if (isLocked()) return;
         if (!collides(currentPiece, 0, 1)) {
             currentPiece.y++;
         } else {
@@ -176,21 +204,21 @@
     }
 
     function moveLeft() {
-        if (gameOver) return;
+        if (isLocked()) return;
         if (!collides(currentPiece, -1, 0)) {
             currentPiece.x--;
         }
     }
 
     function moveRight() {
-        if (gameOver) return;
+        if (isLocked()) return;
         if (!collides(currentPiece, 1, 0)) {
             currentPiece.x++;
         }
     }
 
     function rotate() {
-        if (gameOver) return;
+        if (isLocked()) return;
         const nextRotation = (currentPiece.rotation + 1) % 4;
         if (!collides(currentPiece, 0, 0, nextRotation)) {
             currentPiece.rotation = nextRotation;
@@ -219,15 +247,31 @@
         ctx.fillStyle = '#0f0f23';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // During flash animation, determine if flashing rows are visible this frame
+        let flashVisible = true;
+        if (flashingRows.length > 0) {
+            const blinkIndex = Math.floor(flashTimer / (FLASH_DURATION / FLASH_BLINKS));
+            flashVisible = blinkIndex % 2 === 0;
+        }
+
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
                 if (board[r][c]) {
-                    drawBlock(c, r, board[r][c]);
+                    if (flashingRows.includes(r)) {
+                        if (flashVisible) {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                            ctx.strokeStyle = '#0f0f23';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                        }
+                    } else {
+                        drawBlock(c, r, board[r][c]);
+                    }
                 }
             }
         }
 
-        // Draw grid lines
         ctx.strokeStyle = '#1a1a3a';
         ctx.lineWidth = 0.5;
         for (let r = 0; r <= ROWS; r++) {
@@ -264,14 +308,32 @@
 
     function showGameOver() {
         gameOver = true;
-        clearInterval(dropInterval);
         cancelAnimationFrame(animationId);
         finalScoreEl.textContent = score;
         gameOverOverlay.classList.remove('hidden');
     }
 
-    function gameLoop() {
+    function gameLoop(timestamp) {
         if (gameOver) return;
+
+        const delta = timestamp - lastTime;
+        lastTime = timestamp;
+
+        if (flashingRows.length > 0) {
+            flashTimer += delta;
+            if (flashTimer >= FLASH_DURATION) {
+                removeFullRows();
+                spawnNext();
+                dropAccumulator = 0;
+            }
+        } else {
+            dropAccumulator += delta;
+            if (dropAccumulator >= DROP_INTERVAL) {
+                moveDown();
+                dropAccumulator -= DROP_INTERVAL;
+            }
+        }
+
         draw();
         animationId = requestAnimationFrame(gameLoop);
     }
@@ -280,14 +342,16 @@
         board = createBoard();
         score = 0;
         gameOver = false;
+        flashingRows = [];
+        flashTimer = 0;
+        dropAccumulator = 0;
         scoreEl.textContent = '0';
         gameOverOverlay.classList.add('hidden');
         currentPiece = randomPiece();
 
-        clearInterval(dropInterval);
         cancelAnimationFrame(animationId);
-        dropInterval = setInterval(moveDown, 600);
-        gameLoop();
+        lastTime = performance.now();
+        animationId = requestAnimationFrame(gameLoop);
     }
 
     // Keyboard controls
